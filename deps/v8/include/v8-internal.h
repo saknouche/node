@@ -157,7 +157,7 @@ V8_INLINE static constexpr internal::Address IntToSmi(int value) {
  * Sandbox related types, constants, and functions.
  */
 constexpr bool SandboxIsEnabled() {
-#ifdef V8_SANDBOX
+#ifdef V8_ENABLE_SANDBOX
   return true;
 #else
   return false;
@@ -185,7 +185,7 @@ using ExternalPointer_t = uint32_t;
 using ExternalPointer_t = Address;
 #endif
 
-#ifdef V8_SANDBOX_IS_AVAILABLE
+#ifdef V8_ENABLE_SANDBOX
 
 // Size of the sandbox, excluding the guard regions surrounding it.
 constexpr size_t kSandboxSizeLog2 = 40;  // 1 TB
@@ -276,7 +276,7 @@ static_assert((1 << (32 - kExternalPointerIndexShift)) ==
               "kExternalPointerTableReservationSize and "
               "kExternalPointerIndexShift don't match");
 
-#endif  // V8_SANDBOX_IS_AVAILABLE
+#endif  // V8_ENABLE_SANDBOX
 
 // If sandboxed external pointers are enabled, these tag values will be ORed
 // with the external pointers in the external pointer table to prevent use of
@@ -365,8 +365,8 @@ class Internals {
 
   static const uint32_t kNumIsolateDataSlots = 4;
   static const int kStackGuardSize = 7 * kApiSystemPointerSize;
-  static const int kBuiltinTier0EntryTableSize = 10 * kApiSystemPointerSize;
-  static const int kBuiltinTier0TableSize = 10 * kApiSystemPointerSize;
+  static const int kBuiltinTier0EntryTableSize = 9 * kApiSystemPointerSize;
+  static const int kBuiltinTier0TableSize = 9 * kApiSystemPointerSize;
 
   // IsolateData layout guarantees.
   static const int kIsolateCageBaseOffset = 0;
@@ -406,7 +406,6 @@ class Internals {
   static const int kNodeFlagsOffset = 1 * kApiSystemPointerSize + 3;
   static const int kNodeStateMask = 0x7;
   static const int kNodeStateIsWeakValue = 2;
-  static const int kNodeStateIsPendingValue = 3;
 
   static const int kFirstNonstringType = 0x80;
   static const int kOddballType = 0x83;

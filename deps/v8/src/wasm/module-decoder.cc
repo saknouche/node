@@ -87,6 +87,8 @@ const char* SectionName(SectionCode code) {
       return "Data";
     case kTagSectionCode:
       return "Tag";
+    case kStringRefSectionCode:
+      return "StringRef";
     case kDataCountSectionCode:
       return "DataCount";
     case kNameSectionCode:
@@ -418,13 +420,25 @@ class ModuleDecoderImpl : public Decoder {
           return;
         }
         break;
-      case kTagSectionCode:
+      case kTagSectionCode: {
         if (!CheckUnorderedSection(section_code)) return;
-        if (!CheckSectionOrder(section_code, kMemorySectionCode,
-                               kGlobalSectionCode)) {
+        SectionCode next = enabled_features_.has_stringref()
+                               ? kStringRefSectionCode
+                               : kGlobalSectionCode;
+        if (!CheckSectionOrder(section_code, kMemorySectionCode, next)) {
           return;
         }
         break;
+      }
+      case kStringRefSectionCode: {
+        if (!CheckUnorderedSection(section_code)) return;
+        SectionCode prev =
+            enabled_features_.has_eh() ? kTagSectionCode : kMemorySectionCode;
+        if (!CheckSectionOrder(section_code, prev, kGlobalSectionCode)) {
+          return;
+        }
+        break;
+      }
       case kNameSectionCode:
         // TODO(titzer): report out of place name section as a warning.
         // Be lenient with placement of name section. All except first
@@ -538,6 +552,16 @@ class ModuleDecoderImpl : public Decoder {
         } else {
           errorf(pc(),
                  "unexpected section <%s> (enable with --experimental-wasm-eh)",
+                 SectionName(section_code));
+        }
+        break;
+      case kStringRefSectionCode:
+        if (enabled_features_.has_stringref()) {
+          DecodeStringRefSection();
+        } else {
+          errorf(pc(),
+                 "unexpected section <%s> (enable with "
+                 "--experimental-wasm-stringref)",
                  SectionName(section_code));
         }
         break;
@@ -1451,6 +1475,8 @@ class ModuleDecoderImpl : public Decoder {
     }
   }
 
+  void DecodeStringRefSection() { UNIMPLEMENTED(); }
+
   bool CheckMismatchedCounts() {
     // The declared vs. defined function count is normally checked when
     // decoding the code section, but we have to check it here too in case the
@@ -1756,7 +1782,7 @@ class ModuleDecoderImpl : public Decoder {
 
   uint8_t validate_table_flags(const char* name) {
     uint8_t flags = consume_u8("table limits flags");
-    STATIC_ASSERT(kNoMaximum < kWithMaximum);
+    static_assert(kNoMaximum < kWithMaximum);
     if (V8_UNLIKELY(flags > kWithMaximum)) {
       errorf(pc() - 1, "invalid %s limits flags", name);
     }

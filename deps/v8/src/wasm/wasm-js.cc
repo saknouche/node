@@ -1529,6 +1529,10 @@ void WebAssemblyGlobal(const v8::FunctionCallbackInfo<v8::Value>& args) {
         case internal::wasm::HeapType::kI31:
         case internal::wasm::HeapType::kData:
         case internal::wasm::HeapType::kArray:
+        case internal::wasm::HeapType::kString:
+        case internal::wasm::HeapType::kStringViewWtf8:
+        case internal::wasm::HeapType::kStringViewWtf16:
+        case internal::wasm::HeapType::kStringViewIter:
         default:
           // TODO(7748): Implement these.
           UNIMPLEMENTED();
@@ -1699,14 +1703,14 @@ void EncodeExceptionValues(v8::Isolate* isolate,
       case i::wasm::kF32: {
         float f32 = 0;
         if (!ToF32(value, context, &f32)) return;
-        int32_t i32 = bit_cast<int32_t>(f32);
+        int32_t i32 = base::bit_cast<int32_t>(f32);
         i::EncodeI32ExceptionValue(values_out, &index, i32);
         break;
       }
       case i::wasm::kF64: {
         double f64 = 0;
         if (!ToF64(value, context, &f64)) return;
-        int64_t i64 = bit_cast<int64_t>(f64);
+        int64_t i64 = base::bit_cast<int64_t>(f64);
         i::EncodeI64ExceptionValue(values_out, &index, i64);
         break;
       }
@@ -1719,6 +1723,10 @@ void EncodeExceptionValues(v8::Isolate* isolate,
           case i::wasm::HeapType::kI31:
           case i::wasm::HeapType::kData:
           case i::wasm::HeapType::kArray:
+          case i::wasm::HeapType::kString:
+          case i::wasm::HeapType::kStringViewWtf8:
+          case i::wasm::HeapType::kStringViewWtf16:
+          case i::wasm::HeapType::kStringViewIter:
             values_out->set(index++, *Utils::OpenHandle(*value));
             break;
           case internal::wasm::HeapType::kBottom:
@@ -2282,6 +2290,10 @@ void WebAssemblyExceptionGetArg(
           case i::wasm::HeapType::kI31:
           case i::wasm::HeapType::kData:
           case i::wasm::HeapType::kArray:
+          case i::wasm::HeapType::kString:
+          case i::wasm::HeapType::kStringViewWtf8:
+          case i::wasm::HeapType::kStringViewWtf16:
+          case i::wasm::HeapType::kStringViewIter:
             decode_index++;
             break;
           case i::wasm::HeapType::kBottom:
@@ -2320,14 +2332,14 @@ void WebAssemblyExceptionGetArg(
     case i::wasm::kF32: {
       uint32_t f32_bits = 0;
       DecodeI32ExceptionValue(values, &decode_index, &f32_bits);
-      float f32 = bit_cast<float>(f32_bits);
+      float f32 = base::bit_cast<float>(f32_bits);
       result = v8::Number::New(isolate, f32);
       break;
     }
     case i::wasm::kF64: {
       uint64_t f64_bits = 0;
       DecodeI64ExceptionValue(values, &decode_index, &f64_bits);
-      double f64 = bit_cast<double>(f64_bits);
+      double f64 = base::bit_cast<double>(f64_bits);
       result = v8::Number::New(isolate, f64);
       break;
     }
@@ -2339,7 +2351,11 @@ void WebAssemblyExceptionGetArg(
         case i::wasm::HeapType::kEq:
         case i::wasm::HeapType::kI31:
         case i::wasm::HeapType::kArray:
-        case i::wasm::HeapType::kData: {
+        case i::wasm::HeapType::kData:
+        case i::wasm::HeapType::kString:
+        case i::wasm::HeapType::kStringViewWtf8:
+        case i::wasm::HeapType::kStringViewWtf16:
+        case i::wasm::HeapType::kStringViewIter: {
           auto obj = values->get(decode_index);
           result = Utils::ToLocal(i::Handle<i::Object>(obj, i_isolate));
           break;
@@ -2436,6 +2452,10 @@ void WebAssemblyGlobalGetValueCommon(
         case i::wasm::HeapType::kData:
         case i::wasm::HeapType::kArray:
         case i::wasm::HeapType::kEq:
+        case i::wasm::HeapType::kString:
+        case i::wasm::HeapType::kStringViewWtf8:
+        case i::wasm::HeapType::kStringViewWtf16:
+        case i::wasm::HeapType::kStringViewIter:
         default:
           // TODO(7748): Implement these.
           UNIMPLEMENTED();
@@ -2529,6 +2549,10 @@ void WebAssemblyGlobalSetValue(
         case i::wasm::HeapType::kData:
         case i::wasm::HeapType::kArray:
         case i::wasm::HeapType::kEq:
+        case i::wasm::HeapType::kString:
+        case i::wasm::HeapType::kStringViewWtf8:
+        case i::wasm::HeapType::kStringViewWtf16:
+        case i::wasm::HeapType::kStringViewIter:
         default:
           // TODO(7748): Implement these.
           UNIMPLEMENTED();
@@ -2797,6 +2821,17 @@ void WasmJs::Install(Isolate* isolate, bool exposed_on_global_object) {
   InstallFunc(isolate, webassembly, "validate", WebAssemblyValidate, 1);
   InstallFunc(isolate, webassembly, "instantiate", WebAssemblyInstantiate, 1);
 
+  // TODO(tebbi): Put this behind its own flag once --wasm-gc-js-interop gets
+  // closer to shipping.
+  if (FLAG_wasm_gc_js_interop) {
+    SimpleInstallFunction(
+        isolate, webassembly, "experimentalConvertArrayToString",
+        Builtin::kExperimentalWasmConvertArrayToString, 0, true);
+    SimpleInstallFunction(
+        isolate, webassembly, "experimentalConvertStringToArray",
+        Builtin::kExperimentalWasmConvertStringToArray, 0, true);
+  }
+
   if (FLAG_wasm_test_streaming) {
     isolate->set_wasm_streaming_callback(WasmStreamingCallbackForTesting);
   }
@@ -2851,9 +2886,9 @@ void WasmJs::Install(Isolate* isolate, bool exposed_on_global_object) {
   context->set_wasm_table_constructor(*table_constructor);
   InstallGetter(isolate, table_proto, "length", WebAssemblyTableGetLength);
   InstallFunc(isolate, table_proto, "grow", WebAssemblyTableGrow, 1);
+  InstallFunc(isolate, table_proto, "set", WebAssemblyTableSet, 1);
   InstallFunc(isolate, table_proto, "get", WebAssemblyTableGet, 1, false, NONE,
               SideEffectType::kHasNoSideEffect);
-  InstallFunc(isolate, table_proto, "set", WebAssemblyTableSet, 2);
   if (enabled_features.has_type_reflection()) {
     InstallFunc(isolate, table_proto, "type", WebAssemblyTableType, 0, false,
                 NONE, SideEffectType::kHasNoSideEffect);

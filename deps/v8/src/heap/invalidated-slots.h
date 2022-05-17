@@ -21,7 +21,7 @@ namespace internal {
 // that potentially invalidates slots recorded concurrently. The second part
 // of each element is the size of the corresponding object before the layout
 // change.
-using InvalidatedSlots = std::set<HeapObject, Object::Comparer>;
+using InvalidatedSlots = std::map<HeapObject, int, Object::Comparer>;
 
 // This class provides IsValid predicate that takes into account the set
 // of invalidated objects in the given memory chunk.
@@ -33,6 +33,7 @@ class V8_EXPORT_PRIVATE InvalidatedSlotsFilter {
  public:
   static InvalidatedSlotsFilter OldToOld(MemoryChunk* chunk);
   static InvalidatedSlotsFilter OldToNew(MemoryChunk* chunk);
+  static InvalidatedSlotsFilter OldToShared(MemoryChunk* chunk);
 
   inline bool IsValid(Address slot);
 
@@ -44,9 +45,10 @@ class V8_EXPORT_PRIVATE InvalidatedSlotsFilter {
   InvalidatedSlots::const_iterator iterator_;
   InvalidatedSlots::const_iterator iterator_end_;
   Address sentinel_;
-  Address invalidated_start_;
-  Address next_invalidated_start_;
-  int invalidated_size_;
+  Address invalidated_start_{kNullAddress};
+  Address next_invalidated_start_{kNullAddress};
+  int invalidated_size_{0};
+  int next_invalidated_size_{0};
   InvalidatedSlots empty_;
 #ifdef DEBUG
   Address last_slot_;
@@ -60,6 +62,7 @@ class V8_EXPORT_PRIVATE InvalidatedSlotsFilter {
 class V8_EXPORT_PRIVATE InvalidatedSlotsCleanup {
  public:
   static InvalidatedSlotsCleanup OldToNew(MemoryChunk* chunk);
+  static InvalidatedSlotsCleanup OldToShared(MemoryChunk* chunk);
   static InvalidatedSlotsCleanup NoCleanup(MemoryChunk* chunk);
 
   explicit InvalidatedSlotsCleanup(MemoryChunk* chunk,

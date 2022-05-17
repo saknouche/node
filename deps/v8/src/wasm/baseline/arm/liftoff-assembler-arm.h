@@ -626,7 +626,7 @@ void LiftoffAssembler::LoadFromInstance(Register dst, Register instance,
 void LiftoffAssembler::LoadTaggedPointerFromInstance(Register dst,
                                                      Register instance,
                                                      int offset) {
-  STATIC_ASSERT(kTaggedSize == kSystemPointerSize);
+  static_assert(kTaggedSize == kSystemPointerSize);
   ldr(dst, MemOperand{instance, offset});
 }
 
@@ -738,7 +738,7 @@ void LiftoffAssembler::LoadTaggedPointer(Register dst, Register src_addr,
                                          Register offset_reg,
                                          int32_t offset_imm,
                                          LiftoffRegList pinned) {
-  STATIC_ASSERT(kTaggedSize == kInt32Size);
+  static_assert(kTaggedSize == kInt32Size);
   liftoff::LoadInternal(this, LiftoffRegister(dst), src_addr, offset_reg,
                         offset_imm, LoadType::kI32Load, pinned);
 }
@@ -757,7 +757,7 @@ void LiftoffAssembler::StoreTaggedPointer(Register dst_addr,
                                           LiftoffRegister src,
                                           LiftoffRegList pinned,
                                           SkipWriteBarrier skip_write_barrier) {
-  STATIC_ASSERT(kTaggedSize == kInt32Size);
+  static_assert(kTaggedSize == kInt32Size);
   Register actual_offset_reg = offset_reg;
   if (offset_reg != no_reg && offset_imm != 0) {
     if (cache_state()->is_used(LiftoffRegister(offset_reg))) {
@@ -2460,6 +2460,19 @@ void LiftoffAssembler::emit_i8x16_swizzle(LiftoffRegister dst,
   vtbl(dst.high_fp(), table, rhs.high_fp());
 }
 
+void LiftoffAssembler::emit_i8x16_relaxed_swizzle(LiftoffRegister dst,
+                                                  LiftoffRegister lhs,
+                                                  LiftoffRegister rhs) {
+  bailout(kSimd, "emit_i8x16_relaxed_swizzle");
+}
+
+void LiftoffAssembler::emit_s128_relaxed_laneselect(LiftoffRegister dst,
+                                                    LiftoffRegister src1,
+                                                    LiftoffRegister src2,
+                                                    LiftoffRegister mask) {
+  emit_s128_select(dst, src1, src2, mask);
+}
+
 void LiftoffAssembler::emit_f64x2_splat(LiftoffRegister dst,
                                         LiftoffRegister src) {
   TurboAssembler::Move(dst.low_fp(), src.fp());
@@ -3440,6 +3453,14 @@ void LiftoffAssembler::emit_i16x8_q15mulr_sat_s(LiftoffRegister dst,
            liftoff::GetSimd128Register(src2));
 }
 
+void LiftoffAssembler::emit_relaxed_i16x8_q15mulr_s(LiftoffRegister dst,
+                                                    LiftoffRegister src1,
+                                                    LiftoffRegister src2) {
+  vqrdmulh(NeonS16, liftoff::GetSimd128Register(dst),
+           liftoff::GetSimd128Register(src1),
+           liftoff::GetSimd128Register(src2));
+}
+
 void LiftoffAssembler::emit_i8x16_shuffle(LiftoffRegister dst,
                                           LiftoffRegister lhs,
                                           LiftoffRegister rhs,
@@ -4055,6 +4076,34 @@ void LiftoffAssembler::emit_i32x4_abs(LiftoffRegister dst,
 void LiftoffAssembler::emit_i64x2_abs(LiftoffRegister dst,
                                       LiftoffRegister src) {
   I64x2Abs(liftoff::GetSimd128Register(dst), liftoff::GetSimd128Register(src));
+}
+
+void LiftoffAssembler::emit_f32x4_qfma(LiftoffRegister dst,
+                                       LiftoffRegister src1,
+                                       LiftoffRegister src2,
+                                       LiftoffRegister src3) {
+  bailout(kSimd, "emit_f32x4_qfma");
+}
+
+void LiftoffAssembler::emit_f32x4_qfms(LiftoffRegister dst,
+                                       LiftoffRegister src1,
+                                       LiftoffRegister src2,
+                                       LiftoffRegister src3) {
+  bailout(kSimd, "emit_f32x4_qfms");
+}
+
+void LiftoffAssembler::emit_f64x2_qfma(LiftoffRegister dst,
+                                       LiftoffRegister src1,
+                                       LiftoffRegister src2,
+                                       LiftoffRegister src3) {
+  bailout(kSimd, "emit_f64x2_qfma");
+}
+
+void LiftoffAssembler::emit_f64x2_qfms(LiftoffRegister dst,
+                                       LiftoffRegister src1,
+                                       LiftoffRegister src2,
+                                       LiftoffRegister src3) {
+  bailout(kSimd, "emit_f64x2_qfms");
 }
 
 void LiftoffAssembler::StackCheck(Label* ool_code, Register limit_address) {

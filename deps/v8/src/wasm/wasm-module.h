@@ -152,10 +152,10 @@ class ConstantExpression {
   using KindField = LengthField::Next<Kind, kKindBits>;
 
   // Make sure we reserve enough bits for a {WireBytesRef}'s length and offset.
-  STATIC_ASSERT(kV8MaxWasmModuleSize <= LengthField::kMax + 1);
-  STATIC_ASSERT(kV8MaxWasmModuleSize <= OffsetField::kMax + 1);
+  static_assert(kV8MaxWasmModuleSize <= LengthField::kMax + 1);
+  static_assert(kV8MaxWasmModuleSize <= OffsetField::kMax + 1);
   // Make sure kind fits in kKindBits.
-  STATIC_ASSERT(kLastKind <= KindField::kMax + 1);
+  static_assert(kLastKind <= KindField::kMax + 1);
 
   explicit ConstantExpression(uint64_t bit_field) : bit_field_(bit_field) {}
 
@@ -164,7 +164,7 @@ class ConstantExpression {
 
 // We want to keep {ConstantExpression} small to reduce memory usage during
 // compilation/instantiation.
-STATIC_ASSERT(sizeof(ConstantExpression) <= 8);
+static_assert(sizeof(ConstantExpression) <= 8);
 
 // Static representation of a wasm global variable.
 struct WasmGlobal {
@@ -192,6 +192,12 @@ struct WasmTag {
   const FunctionSig* ToFunctionSig() const { return sig; }
 
   const WasmTagSig* sig;  // type signature of the tag.
+};
+
+// Static representation of a wasm literal stringref.
+struct WasmStringRefLiteral {
+  explicit WasmStringRefLiteral(uint32_t offset) : offset(offset) {}
+  uint32_t offset;  // Offset into string literals table.
 };
 
 // Static representation of a wasm data segment.
@@ -399,8 +405,10 @@ struct CallSiteFeedback {
 };
 struct FunctionTypeFeedback {
   std::vector<CallSiteFeedback> feedback_vector;
-  std::map<WasmCodePosition, int> positions;
+  std::vector<uint32_t> call_targets;
   int tierup_priority = 0;
+
+  static constexpr uint32_t kNonDirectCall = 0xFFFFFFFF;
 };
 struct TypeFeedbackStorage {
   std::map<uint32_t, FunctionTypeFeedback> feedback_for_function;
@@ -510,6 +518,7 @@ struct V8_EXPORT_PRIVATE WasmModule {
   std::vector<WasmImport> import_table;
   std::vector<WasmExport> export_table;
   std::vector<WasmTag> tags;
+  std::vector<WasmStringRefLiteral> stringref_literals;
   std::vector<WasmElemSegment> elem_segments;
   std::vector<WasmCompilationHint> compilation_hints;
   BranchHintInfo branch_hints;

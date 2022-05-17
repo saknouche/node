@@ -128,6 +128,7 @@ class WasmGraphBuildingInterface {
       auto feedback = feedbacks.feedback_for_function.find(func_index_);
       if (feedback != feedbacks.feedback_for_function.end()) {
         type_feedback_ = feedback->second.feedback_vector;
+        builder_->ReserveCallCounts(type_feedback_.size());
         // We need to keep the feedback in the module to inline later. However,
         // this means we are stuck with it forever.
         // TODO(jkummerow): Reconsider our options here.
@@ -640,21 +641,25 @@ class WasmGraphBuildingInterface {
   void CallDirect(FullDecoder* decoder,
                   const CallFunctionImmediate<validate>& imm,
                   const Value args[], Value returns[]) {
+    int maybe_call_count = -1;
     if (FLAG_wasm_speculative_inlining && type_feedback_.size() > 0) {
-      DCHECK_LT(feedback_instruction_index_, type_feedback_.size());
-      feedback_instruction_index_++;
+      const CallSiteFeedback& feedback = next_call_feedback();
+      maybe_call_count = feedback.absolute_call_frequency;
     }
-    DoCall(decoder, CallInfo::CallDirect(imm.index), imm.sig, args, returns);
+    DoCall(decoder, CallInfo::CallDirect(imm.index, maybe_call_count), imm.sig,
+           args, returns);
   }
 
   void ReturnCall(FullDecoder* decoder,
                   const CallFunctionImmediate<validate>& imm,
                   const Value args[]) {
+    int maybe_call_count = -1;
     if (FLAG_wasm_speculative_inlining && type_feedback_.size() > 0) {
-      DCHECK_LT(feedback_instruction_index_, type_feedback_.size());
-      feedback_instruction_index_++;
+      const CallSiteFeedback& feedback = next_call_feedback();
+      maybe_call_count = feedback.absolute_call_frequency;
     }
-    DoReturnCall(decoder, CallInfo::CallDirect(imm.index), imm.sig, args);
+    DoReturnCall(decoder, CallInfo::CallDirect(imm.index, maybe_call_count),
+                 imm.sig, args);
   }
 
   void CallIndirect(FullDecoder* decoder, const Value& index,
@@ -679,11 +684,11 @@ class WasmGraphBuildingInterface {
                const FunctionSig* sig, uint32_t sig_index, const Value args[],
                Value returns[]) {
     int maybe_feedback = -1;
+    int maybe_call_count = -1;
     if (FLAG_wasm_speculative_inlining && type_feedback_.size() > 0) {
-      DCHECK_LT(feedback_instruction_index_, type_feedback_.size());
-      maybe_feedback =
-          type_feedback_[feedback_instruction_index_].function_index;
-      feedback_instruction_index_++;
+      const CallSiteFeedback& feedback = next_call_feedback();
+      maybe_feedback = feedback.function_index;
+      maybe_call_count = feedback.absolute_call_frequency;
     }
     if (maybe_feedback == -1) {
       DoCall(decoder, CallInfo::CallRef(func_ref, NullCheckFor(func_ref.type)),
@@ -713,7 +718,8 @@ class WasmGraphBuildingInterface {
     ssa_env_->control = success_control;
     Value* returns_direct =
         decoder->zone()->NewArray<Value>(sig->return_count());
-    DoCall(decoder, CallInfo::CallDirect(expected_function_index),
+    DoCall(decoder,
+           CallInfo::CallDirect(expected_function_index, maybe_call_count),
            decoder->module_->signature(sig_index), args, returns_direct);
     TFNode* control_direct = control();
     TFNode* effect_direct = effect();
@@ -749,11 +755,11 @@ class WasmGraphBuildingInterface {
                      const FunctionSig* sig, uint32_t sig_index,
                      const Value args[]) {
     int maybe_feedback = -1;
+    int maybe_call_count = -1;
     if (FLAG_wasm_speculative_inlining && type_feedback_.size() > 0) {
-      DCHECK_LT(feedback_instruction_index_, type_feedback_.size());
-      maybe_feedback =
-          type_feedback_[feedback_instruction_index_].function_index;
-      feedback_instruction_index_++;
+      const CallSiteFeedback& feedback = next_call_feedback();
+      maybe_feedback = feedback.function_index;
+      maybe_call_count = feedback.absolute_call_frequency;
     }
     if (maybe_feedback == -1) {
       DoReturnCall(decoder,
@@ -782,8 +788,10 @@ class WasmGraphBuildingInterface {
 
     builder_->SetControl(success_control);
     ssa_env_->control = success_control;
-    DoReturnCall(decoder, CallInfo::CallDirect(expected_function_index), sig,
-                 args);
+    DoReturnCall(
+        decoder,
+        CallInfo::CallDirect(expected_function_index, maybe_call_count), sig,
+        args);
 
     builder_->SetEffectControl(initial_effect, failure_control);
     ssa_env_->effect = initial_effect;
@@ -1311,6 +1319,136 @@ class WasmGraphBuildingInterface {
         br_depth, false);
   }
 
+  void StringNewWtf8(FullDecoder* decoder,
+                     const MemoryIndexImmediate<validate>& imm,
+                     const Value& index, const Value& bytes, Value* result) {
+    UNIMPLEMENTED();
+  }
+
+  void StringNewWtf16(FullDecoder* decoder,
+                      const MemoryIndexImmediate<validate>& imm,
+                      const Value& index, const Value& codeunits,
+                      Value* result) {
+    UNIMPLEMENTED();
+  }
+
+  void StringConst(FullDecoder* decoder,
+                   const StringConstImmediate<validate>& imm, Value* result) {
+    UNIMPLEMENTED();
+  }
+
+  void StringMeasureUtf8(FullDecoder* decoder, const Value& str,
+                         Value* result) {
+    UNIMPLEMENTED();
+  }
+
+  void StringMeasureWtf8(FullDecoder* decoder, const Value& str,
+                         Value* result) {
+    UNIMPLEMENTED();
+  }
+
+  void StringMeasureWtf16(FullDecoder* decoder, const Value& str,
+                          Value* result) {
+    UNIMPLEMENTED();
+  }
+
+  void StringEncodeWtf8(FullDecoder* decoder,
+                        const EncodeWtf8Immediate<validate>& imm,
+                        const Value& str, const Value& address) {
+    UNIMPLEMENTED();
+  }
+
+  void StringEncodeWtf16(FullDecoder* decoder,
+                         const MemoryIndexImmediate<validate>& imm,
+                         const Value& str, const Value& address) {
+    UNIMPLEMENTED();
+  }
+
+  void StringConcat(FullDecoder* decoder, const Value& head, const Value& tail,
+                    Value* result) {
+    UNIMPLEMENTED();
+  }
+
+  void StringEq(FullDecoder* decoder, const Value& a, const Value& b,
+                Value* result) {
+    UNIMPLEMENTED();
+  }
+
+  void StringAsWtf8(FullDecoder* decoder, const Value& str, Value* result) {
+    UNIMPLEMENTED();
+  }
+
+  void StringViewWtf8Advance(FullDecoder* decoder, const Value& view,
+                             const Value& pos, const Value& bytes,
+                             Value* result) {
+    UNIMPLEMENTED();
+  }
+
+  void StringViewWtf8Encode(FullDecoder* decoder,
+                            const EncodeWtf8Immediate<validate>& imm,
+                            const Value& view, const Value& addr,
+                            const Value& pos, const Value& bytes,
+                            Value* next_pos, Value* bytes_written) {
+    UNIMPLEMENTED();
+  }
+
+  void StringViewWtf8Slice(FullDecoder* decoder, const Value& view,
+                           const Value& start, const Value& end,
+                           Value* result) {
+    UNIMPLEMENTED();
+  }
+
+  void StringAsWtf16(FullDecoder* decoder, const Value& str, Value* result) {
+    UNIMPLEMENTED();
+  }
+
+  void StringViewWtf16Length(FullDecoder* decoder, const Value& view,
+                             Value* result) {
+    UNIMPLEMENTED();
+  }
+
+  void StringViewWtf16GetCodeUnit(FullDecoder* decoder, const Value& view,
+                                  const Value& pos, Value* result) {
+    UNIMPLEMENTED();
+  }
+
+  void StringViewWtf16Encode(FullDecoder* decoder,
+                             const MemoryIndexImmediate<validate>& imm,
+                             const Value& view, const Value& addr,
+                             const Value& pos, const Value& codeunits) {
+    UNIMPLEMENTED();
+  }
+
+  void StringViewWtf16Slice(FullDecoder* decoder, const Value& view,
+                            const Value& start, const Value& end,
+                            Value* result) {
+    UNIMPLEMENTED();
+  }
+
+  void StringAsIter(FullDecoder* decoder, const Value& str, Value* result) {
+    UNIMPLEMENTED();
+  }
+
+  void StringViewIterCur(FullDecoder* decoder, const Value& view,
+                         Value* result) {
+    UNIMPLEMENTED();
+  }
+
+  void StringViewIterAdvance(FullDecoder* decoder, const Value& view,
+                             const Value& codepoints, Value* result) {
+    UNIMPLEMENTED();
+  }
+
+  void StringViewIterRewind(FullDecoder* decoder, const Value& view,
+                            const Value& codepoints, Value* result) {
+    UNIMPLEMENTED();
+  }
+
+  void StringViewIterSlice(FullDecoder* decoder, const Value& view,
+                           const Value& codepoints, Value* result) {
+    UNIMPLEMENTED();
+  }
+
   void Forward(FullDecoder* decoder, const Value& from, Value* to) {
     to->node = from.node;
   }
@@ -1628,8 +1766,9 @@ class WasmGraphBuildingInterface {
    public:
     enum CallMode { kCallDirect, kCallIndirect, kCallRef };
 
-    static CallInfo CallDirect(uint32_t callee_index) {
-      return {kCallDirect, callee_index, nullptr, 0,
+    static CallInfo CallDirect(uint32_t callee_index, int call_count) {
+      return {kCallDirect, callee_index, nullptr,
+              static_cast<uint32_t>(call_count),
               CheckForNull::kWithoutNullCheck};
     }
 
@@ -1656,6 +1795,11 @@ class WasmGraphBuildingInterface {
       return callee_or_sig_index_;
     }
 
+    int call_count() {
+      DCHECK_EQ(call_mode_, kCallDirect);
+      return static_cast<int>(table_index_or_call_count_);
+    }
+
     CheckForNull null_check() {
       DCHECK_EQ(call_mode_, kCallRef);
       return null_check_;
@@ -1668,22 +1812,22 @@ class WasmGraphBuildingInterface {
 
     uint32_t table_index() {
       DCHECK_EQ(call_mode_, kCallIndirect);
-      return table_index_;
+      return table_index_or_call_count_;
     }
 
    private:
     CallInfo(CallMode call_mode, uint32_t callee_or_sig_index,
-             const Value* index_or_callee_value, uint32_t table_index,
-             CheckForNull null_check)
+             const Value* index_or_callee_value,
+             uint32_t table_index_or_call_count, CheckForNull null_check)
         : call_mode_(call_mode),
           callee_or_sig_index_(callee_or_sig_index),
           index_or_callee_value_(index_or_callee_value),
-          table_index_(table_index),
+          table_index_or_call_count_(table_index_or_call_count),
           null_check_(null_check) {}
     CallMode call_mode_;
     uint32_t callee_or_sig_index_;
     const Value* index_or_callee_value_;
-    uint32_t table_index_;
+    uint32_t table_index_or_call_count_;
     CheckForNull null_check_;
   };
 
@@ -1720,13 +1864,14 @@ class WasmGraphBuildingInterface {
                          real_sig, base::VectorOf(arg_nodes),
                          base::VectorOf(return_nodes), decoder->position()));
         break;
-      case CallInfo::kCallDirect:
-        CheckForException(
-            decoder, builder_->CallDirect(call_info.callee_index(), real_sig,
-                                          base::VectorOf(arg_nodes),
-                                          base::VectorOf(return_nodes),
-                                          decoder->position()));
+      case CallInfo::kCallDirect: {
+        TFNode* call = builder_->CallDirect(
+            call_info.callee_index(), real_sig, base::VectorOf(arg_nodes),
+            base::VectorOf(return_nodes), decoder->position());
+        builder_->StoreCallCount(call, call_info.call_count());
+        CheckForException(decoder, call);
         break;
+      }
       case CallInfo::kCallRef:
         CheckForException(
             decoder,
@@ -1786,15 +1931,23 @@ class WasmGraphBuildingInterface {
             call_info.table_index(), call_info.sig_index(), real_sig,
             base::VectorOf(arg_nodes), decoder->position());
         break;
-      case CallInfo::kCallDirect:
-        builder_->ReturnCall(call_info.callee_index(), real_sig,
-                             base::VectorOf(arg_nodes), decoder->position());
+      case CallInfo::kCallDirect: {
+        TFNode* call = builder_->ReturnCall(call_info.callee_index(), real_sig,
+                                            base::VectorOf(arg_nodes),
+                                            decoder->position());
+        builder_->StoreCallCount(call, call_info.call_count());
         break;
+      }
       case CallInfo::kCallRef:
         builder_->ReturnCallRef(real_sig, base::VectorOf(arg_nodes),
                                 call_info.null_check(), decoder->position());
         break;
     }
+  }
+
+  const CallSiteFeedback& next_call_feedback() {
+    DCHECK_LT(feedback_instruction_index_, type_feedback_.size());
+    return type_feedback_[feedback_instruction_index_++];
   }
 
   void BuildLoopExits(FullDecoder* decoder, Control* loop) {

@@ -52,7 +52,7 @@ class V8_NODISCARD InitializedIgnitionHandleScope
     : public InitializedHandleScope {
  public:
   InitializedIgnitionHandleScope() {
-    i::FLAG_always_opt = false;
+    i::FLAG_always_turbofan = false;
     i::FLAG_allow_natives_syntax = true;
     i::FLAG_enable_lazy_source_positions = false;
   }
@@ -1530,7 +1530,7 @@ TEST(ContextVariables) {
   // The wide check below relies on MIN_CONTEXT_SLOTS + 3 + 250 == 256, if this
   // ever changes, the REPEAT_XXX should be changed to output the correct number
   // of unique variables to trigger the wide slot load / store.
-  STATIC_ASSERT(Context::MIN_CONTEXT_EXTENDED_SLOTS + 3 + 250 == 256);
+  static_assert(Context::MIN_CONTEXT_EXTENDED_SLOTS + 3 + 250 == 256);
 
   // For historical reasons, this test expects the first unique identifier
   // to be 896.

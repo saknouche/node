@@ -169,7 +169,7 @@ void Code::FlushICache() const {
 void Code::CopyFromNoFlush(ByteArray reloc_info, Heap* heap,
                            const CodeDesc& desc) {
   // Copy code.
-  STATIC_ASSERT(kOnHeapBodyIsContiguous);
+  static_assert(kOnHeapBodyIsContiguous);
   CopyBytes(reinterpret_cast<byte*>(raw_instruction_start()), desc.buffer,
             static_cast<size_t>(desc.instr_size));
   // TODO(jgruber,v8:11036): Merge with the above.
@@ -292,7 +292,7 @@ bool Code::IsIsolateIndependent(Isolate* isolate) {
       ~RelocInfo::ModeMask(RelocInfo::CONST_POOL) &
       ~RelocInfo::ModeMask(RelocInfo::OFF_HEAP_TARGET) &
       ~RelocInfo::ModeMask(RelocInfo::VENEER_POOL);
-  STATIC_ASSERT(kModeMask ==
+  static_assert(kModeMask ==
                 (RelocInfo::ModeMask(RelocInfo::CODE_TARGET) |
                  RelocInfo::ModeMask(RelocInfo::RELATIVE_CODE_TARGET) |
                  RelocInfo::ModeMask(RelocInfo::COMPRESSED_EMBEDDED_OBJECT) |
@@ -610,7 +610,6 @@ void BytecodeArray::Disassemble(std::ostream& os) {
   os << "Parameter count " << parameter_count() << "\n";
   os << "Register count " << register_count() << "\n";
   os << "Frame size " << frame_size() << "\n";
-  os << "OSR urgency: " << osr_urgency() << "\n";
   os << "Bytecode age: " << bytecode_age() << "\n";
 
   Address base_address = GetFirstBytecodeAddress();

@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <type_traits>
 
+#include "cppgc/internal/api-constants.h"
 #include "cppgc/internal/pointer-policies.h"
 #include "cppgc/sentinel-pointer.h"
 #include "cppgc/type-traits.h"
@@ -20,36 +21,167 @@ class Visitor;
 
 namespace internal {
 
+#if defined(CPPGC_POINTER_COMPRESSION)
+
+class CageBaseGlobal final {
+ public:
+  V8_INLINE static uintptr_t Get() {
+    CPPGC_DCHECK(IsBaseConsistent());
+    return g_base_;
+  }
+
+  V8_INLINE static bool IsSet() {
+    CPPGC_DCHECK(IsBaseConsistent());
+    return (g_base_ & ~kLowerHalfWordMask) != 0;
+  }
+
+ private:
+  // We keep the lower halfword as ones to speed up decompression.
+  static constexpr uintptr_t kLowerHalfWordMask =
+      (api_constants::kCagedHeapReservationAlignment - 1);
+
+  static thread_local V8_EXPORT uintptr_t g_base_
+#if !V8_CC_MSVC
+      __attribute__((require_constant_initialization))
+#endif  // !V8_CC_MSVC
+      ;
+
+  CageBaseGlobal() = delete;
+
+  V8_INLINE static bool IsBaseConsistent() {
+    return kLowerHalfWordMask == (g_base_ & kLowerHalfWordMask);
+  }
+
+  friend class CageBaseGlobalUpdater;
+};
+
+class CompressedPointer final {
+ public:
+  using Storage = uint32_t;
+
+  V8_INLINE CompressedPointer() : value_(0u) {}
+  V8_INLINE explicit CompressedPointer(const void* ptr)
+      : value_(Compress(ptr)) {}
+
+  V8_INLINE const void* Load() const { return Decompress(value_); }
+  V8_INLINE const void* LoadAtomic() const {
+    return Decompress(
+        reinterpret_cast<const std::atomic<Storage>&>(value_).load(
+            std::memory_order_relaxed));
+  }
+  V8_INLINE Storage LoadRaw() const { return value_; }
+
+  V8_INLINE void Store(const void* ptr) { value_ = Compress(ptr); }
+  V8_INLINE void StoreAtomic(const void* value) {
+    reinterpret_cast<std::atomic<Storage>&>(value_).store(
+        Compress(value), std::memory_order_relaxed);
+  }
+  V8_INLINE void StoreRaw(Storage value) { value_ = value; }
+
+  static V8_INLINE Storage Compress(const void* ptr) {
+    static_assert(
+        SentinelPointer::kSentinelValue == 0b10,
+        "The compression scheme relies on the sentinel encoded as 0b10");
+    static constexpr size_t kGigaCageMask =
+        ~(api_constants::kCagedHeapReservationAlignment - 1);
+
+    CPPGC_DCHECK(CageBaseGlobal::IsSet());
+    const uintptr_t base = CageBaseGlobal::Get();
+    CPPGC_DCHECK(!ptr || ptr == kSentinelPointer ||
+                 (base & kGigaCageMask) ==
+                     (reinterpret_cast<uintptr_t>(ptr) & kGigaCageMask));
+
+    const auto uptr = reinterpret_cast<uintptr_t>(ptr);
+    // Truncate the pointer and shift right by one.
+    auto compressed = static_cast<Storage>(uptr) >> 1;
+    // If the pointer is regular, set the most significant bit.
+    if (V8_LIKELY(compressed > 1)) {
+      CPPGC_DCHECK((reinterpret_cast<uintptr_t>(ptr) &
+                    (api_constants::kAllocationGranularity - 1)) == 0);
+      compressed |= 0x80000000;
+    }
+    return compressed;
+  }
+
+  static V8_INLINE void* Decompress(Storage ptr) {
+    CPPGC_DCHECK(CageBaseGlobal::IsSet());
+    const uintptr_t base = CageBaseGlobal::Get();
+    // Sign extend the pointer and shift left by one.
+    const int64_t mask = static_cast<int64_t>(static_cast<int32_t>(ptr)) << 1;
+    return reinterpret_cast<void*>(mask & base);
+  }
+
+ private:
+  // All constructors initialize `value_`. Do not add a default value here as it
+  // results in a non-atomic write on some builds, even when the atomic version
+  // of the constructor is used.
+  Storage value_;
+};
+
+#endif  // defined(CPPGC_POINTER_COMPRESSION)
+
+class RawPointer final {
+ public:
+  using Storage = uintptr_t;
+
+  RawPointer() : value_(0u) {}
+  explicit RawPointer(const void* ptr)
+      : value_(reinterpret_cast<uintptr_t>(ptr)) {}
+
+  V8_INLINE const void* Load() const {
+    return reinterpret_cast<const void*>(value_);
+  }
+  V8_INLINE const void* LoadAtomic() const {
+    return reinterpret_cast<const std::atomic<const void*>&>(value_).load(
+        std::memory_order_relaxed);
+  }
+  V8_INLINE Storage LoadRaw() const { return value_; }
+
+  V8_INLINE void Store(const void* ptr) {
+    value_ = reinterpret_cast<uintptr_t>(ptr);
+  }
+  V8_INLINE void StoreAtomic(const void* ptr) {
+    reinterpret_cast<std::atomic<uintptr_t>&>(value_).store(
+        reinterpret_cast<uintptr_t>(ptr), std::memory_order_relaxed);
+  }
+  V8_INLINE void StoreRaw(Storage value) { value_ = value; }
+
+ private:
+  // All constructors initialize `ptr_`. Do not add a default value here as it
+  // results in a non-atomic write on some builds, even when the atomic version
+  // of the constructor is used.
+  uintptr_t value_;
+};
+
 // MemberBase always refers to the object as const object and defers to
 // BasicMember on casting to the right type as needed.
 class MemberBase {
  protected:
   struct AtomicInitializerTag {};
 
-  MemberBase() : raw_(nullptr) {}
+  MemberBase() = default;
   explicit MemberBase(const void* value) : raw_(value) {}
   MemberBase(const void* value, AtomicInitializerTag) { SetRawAtomic(value); }
 
-  const void** GetRawSlot() const { return &raw_; }
-  const void* GetRaw() const { return raw_; }
-  void SetRaw(void* value) { raw_ = value; }
-
-  const void* GetRawAtomic() const {
-    return reinterpret_cast<const std::atomic<const void*>*>(&raw_)->load(
-        std::memory_order_relaxed);
+  const void** GetRawSlot() const {
+    return reinterpret_cast<const void**>(const_cast<MemberBase*>(this));
   }
-  void SetRawAtomic(const void* value) {
-    reinterpret_cast<std::atomic<const void*>*>(&raw_)->store(
-        value, std::memory_order_relaxed);
-  }
+  const void* GetRaw() const { return raw_.Load(); }
+  void SetRaw(void* value) { raw_.Store(value); }
 
-  void ClearFromGC() const { raw_ = nullptr; }
+  const void* GetRawAtomic() const { return raw_.LoadAtomic(); }
+  void SetRawAtomic(const void* value) { raw_.StoreAtomic(value); }
+
+  void ClearFromGC() const { raw_.StoreRaw(0u); }
 
  private:
-  // All constructors initialize `raw_`. Do not add a default value here as it
-  // results in a non-atomic write on some builds, even when the atomic version
-  // of the constructor is used.
-  mutable const void* raw_;
+#if defined(CPPGC_POINTER_COMPRESSION)
+  using Storage = CompressedPointer;
+#else   // !defined(CPPGC_POINTER_COMPRESSION)
+  using Storage = RawPointer;
+#endif  // !defined(CPPGC_POINTER_COMPRESSION)
+
+  mutable Storage raw_;
 };
 
 // The basic class from which all Member classes are 'generated'.
@@ -60,7 +192,7 @@ class BasicMember final : private MemberBase, private CheckingPolicy {
   using PointeeType = T;
 
   constexpr BasicMember() = default;
-  constexpr BasicMember(std::nullptr_t) {}     // NOLINT
+  constexpr BasicMember(std::nullptr_t) {}           // NOLINT
   BasicMember(SentinelPointer s) : MemberBase(s) {}  // NOLINT
   BasicMember(T* raw) : MemberBase(raw) {            // NOLINT
     InitializingWriteBarrier();

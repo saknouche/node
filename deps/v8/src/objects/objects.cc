@@ -123,7 +123,9 @@
 #include "src/strings/string-stream.h"
 #include "src/strings/unicode-decoder.h"
 #include "src/strings/unicode-inl.h"
+#include "src/utils/hex-format.h"
 #include "src/utils/ostreams.h"
+#include "src/utils/sha-256.h"
 #include "src/utils/utils-inl.h"
 #include "src/zone/zone.h"
 
@@ -1038,7 +1040,7 @@ MaybeHandle<FixedArray> CreateListFromArrayLikeFastPath(
           length > static_cast<size_t>(FixedArray::kMaxLength)) {
         return MaybeHandle<FixedArray>();
       }
-      STATIC_ASSERT(FixedArray::kMaxLength <=
+      static_assert(FixedArray::kMaxLength <=
                     std::numeric_limits<uint32_t>::max());
       return array->GetElementsAccessor()->CreateListFromArrayLike(
           isolate, array, static_cast<uint32_t>(length));
@@ -1328,7 +1330,7 @@ Handle<TemplateList> TemplateList::New(Isolate* isolate, int size) {
 Handle<TemplateList> TemplateList::Add(Isolate* isolate,
                                        Handle<TemplateList> list,
                                        Handle<i::Object> value) {
-  STATIC_ASSERT(kFirstElementIndex == 1);
+  static_assert(kFirstElementIndex == 1);
   int index = list->length() + 1;
   Handle<i::FixedArray> fixed_array = Handle<FixedArray>::cast(list);
   fixed_array = FixedArray::SetAndGrow(isolate, fixed_array, index, value);
@@ -4516,7 +4518,7 @@ void DescriptorArray::Sort() {
 
 int16_t DescriptorArray::UpdateNumberOfMarkedDescriptors(
     unsigned mark_compact_epoch, int16_t new_marked) {
-  STATIC_ASSERT(kMaxNumberOfDescriptors <=
+  static_assert(kMaxNumberOfDescriptors <=
                 NumberOfMarkedDescriptors::kMaxNumberOfMarkedDescriptors);
   int16_t old_raw_marked = raw_number_of_marked_descriptors();
   int16_t old_marked =
@@ -5040,6 +5042,47 @@ Object Script::GetNameOrSourceURL() {
   // Keep in sync with ScriptNameOrSourceURL in messages.js.
   if (!source_url().IsUndefined()) return source_url();
   return name();
+}
+
+Handle<String> Script::GetScriptHash(bool forceForInspector) {
+  auto isolate = GetIsolate();
+
+  if (origin_options().IsOpaque() && !forceForInspector) {
+    return isolate->factory()->empty_string();
+  }
+
+  Object maybe_source_hash = source_hash();
+  if (maybe_source_hash.IsString()) {
+    Handle<String> precomputed(String::cast(maybe_source_hash), isolate);
+    if (precomputed->length() > 0) {
+      return precomputed;
+    }
+  }
+
+  Handle<Object> src(source(), isolate);
+  if (!src->IsString()) {
+    return isolate->factory()->empty_string();
+  }
+
+  Handle<String> src_text = Handle<String>::cast(src);
+  char formatted_hash[kSizeOfFormattedSha256Digest];
+  // std::unique_ptr<UChar[]> buffer(new UChar[src->Length()]);
+  // int written = src->Write(isolate,
+  // reinterpret_cast<uint16_t*>(buffer.get()), 0, source->Length()); size_t
+  // writtenSizeInBytes = sizeof(UChar) * written;
+
+  std::unique_ptr<char[]> string_val = src_text->ToCString();
+  size_t len = strlen(string_val.get());
+  uint8_t hash[kSizeOfSha256Digest];
+  SHA256_hash(string_val.get(), len, hash);
+  FormatBytesToHex(formatted_hash, kSizeOfFormattedSha256Digest, hash,
+                   kSizeOfSha256Digest);
+  formatted_hash[kSizeOfSha256Digest * 2] = '\0';
+
+  Handle<String> result =
+      isolate->factory()->NewStringFromAsciiChecked(formatted_hash);
+  set_source_hash(*result);
+  return result;
 }
 
 template <typename IsolateT>
@@ -5622,7 +5665,7 @@ Handle<Object> JSPromise::TriggerPromiseReactions(Isolate* isolate,
     }
     if (!has_handler_context) handler_context = isolate->native_context();
 
-    STATIC_ASSERT(
+    static_assert(
         static_cast<int>(PromiseReaction::kSize) ==
         static_cast<int>(
             PromiseReactionJobTask::kSizeOfAllPromiseReactionJobTasks));
@@ -5634,14 +5677,14 @@ Handle<Object> JSPromise::TriggerPromiseReactions(Isolate* isolate,
           *argument);
       Handle<PromiseFulfillReactionJobTask>::cast(task)->set_context(
           *handler_context);
-      STATIC_ASSERT(
+      static_assert(
           static_cast<int>(PromiseReaction::kFulfillHandlerOffset) ==
           static_cast<int>(PromiseFulfillReactionJobTask::kHandlerOffset));
-      STATIC_ASSERT(
+      static_assert(
           static_cast<int>(PromiseReaction::kPromiseOrCapabilityOffset) ==
           static_cast<int>(
               PromiseFulfillReactionJobTask::kPromiseOrCapabilityOffset));
-      STATIC_ASSERT(
+      static_assert(
           static_cast<int>(
               PromiseReaction::kContinuationPreservedEmbedderDataOffset) ==
           static_cast<int>(PromiseFulfillReactionJobTask::
@@ -5656,11 +5699,11 @@ Handle<Object> JSPromise::TriggerPromiseReactions(Isolate* isolate,
           *handler_context);
       Handle<PromiseRejectReactionJobTask>::cast(task)->set_handler(
           *primary_handler);
-      STATIC_ASSERT(
+      static_assert(
           static_cast<int>(PromiseReaction::kPromiseOrCapabilityOffset) ==
           static_cast<int>(
               PromiseRejectReactionJobTask::kPromiseOrCapabilityOffset));
-      STATIC_ASSERT(
+      static_assert(
           static_cast<int>(
               PromiseReaction::kContinuationPreservedEmbedderDataOffset) ==
           static_cast<int>(PromiseRejectReactionJobTask::
@@ -6213,7 +6256,7 @@ int Dictionary<Derived, Shape>::NumberOfEnumerableProperties() {
     if (k.FilterKey(ENUMERABLE_STRINGS)) continue;
     PropertyDetails details = this->DetailsAt(i);
     PropertyAttributes attr = details.attributes();
-    if ((attr & ONLY_ENUMERABLE) == 0) result++;
+    if ((int{attr} & ONLY_ENUMERABLE) == 0) result++;
   }
   return result;
 }
@@ -6981,7 +7024,7 @@ void JSFinalizationRegistry::RemoveCellFromUnregisterTokenMap(
   }
 
   // weak_cell is now removed from the unregister token map, so clear its
-  // unregister token-related fields for heap verification.
+  // unregister token-related fields.
   weak_cell.set_unregister_token(undefined);
   weak_cell.set_key_list_prev(undefined);
   weak_cell.set_key_list_next(undefined);

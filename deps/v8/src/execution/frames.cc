@@ -420,7 +420,7 @@ SafeStackFrameIterator::SafeStackFrameIterator(Isolate* isolate, Address pc,
     // we check only that kMarkerOffset is within the stack bounds and do
     // compile time check that kContextOffset slot is pushed on the stack before
     // kMarkerOffset.
-    STATIC_ASSERT(StandardFrameConstants::kFunctionOffset <
+    static_assert(StandardFrameConstants::kFunctionOffset <
                   StandardFrameConstants::kContextOffset);
     Address frame_marker = fp + StandardFrameConstants::kFunctionOffset;
     if (IsValidStackAddress(frame_marker)) {
@@ -826,7 +826,7 @@ StackFrame::Type ExitFrame::ComputeFrameType(Address fp) {
     return EXIT;
   }
 
-  intptr_t marker_int = bit_cast<intptr_t>(marker);
+  intptr_t marker_int = base::bit_cast<intptr_t>(marker);
 
   StackFrame::Type frame_type = static_cast<StackFrame::Type>(marker_int >> 1);
   switch (frame_type) {
@@ -1132,6 +1132,7 @@ void CommonFrame::IterateCompiledFrame(RootVisitor* v) const {
       case OPTIMIZED:
       case INTERPRETED:
       case BASELINE:
+      case MAGLEV:
       case BUILTIN:
         // These frame types have a context, but they are actually stored
         // in the place on the stack that one finds the frame type.
@@ -2449,14 +2450,12 @@ uint32_t PcAddressForHashing(Isolate* isolate, Address address) {
 
 InnerPointerToCodeCache::InnerPointerToCodeCacheEntry*
 InnerPointerToCodeCache::GetCacheEntry(Address inner_pointer) {
-  isolate_->counters()->pc_to_code()->Increment();
   DCHECK(base::bits::IsPowerOfTwo(kInnerPointerToCodeCacheSize));
   uint32_t hash =
       ComputeUnseededHash(PcAddressForHashing(isolate_, inner_pointer));
   uint32_t index = hash & (kInnerPointerToCodeCacheSize - 1);
   InnerPointerToCodeCacheEntry* entry = cache(index);
   if (entry->inner_pointer == inner_pointer) {
-    isolate_->counters()->pc_to_code_cached()->Increment();
     DCHECK(entry->code ==
            isolate_->heap()->GcSafeFindCodeForInnerPointer(inner_pointer));
   } else {

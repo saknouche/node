@@ -523,26 +523,25 @@ bool V8_EXPORT_PRIVATE IsJSCompatibleSignature(const FunctionSig* sig,
   V(F64x2ConvertLowI32x4S, 0xfdfe, s_s)      \
   V(F64x2ConvertLowI32x4U, 0xfdff, s_s)
 
-#define FOREACH_RELAXED_SIMD_OPCODE(V)        \
-  V(I8x16RelaxedSwizzle, 0xfda2, s_ss)        \
-  V(I8x16RelaxedLaneSelect, 0xfdb2, s_sss)    \
-  V(I16x8RelaxedLaneSelect, 0xfdb3, s_sss)    \
-  V(I32x4RelaxedLaneSelect, 0xfdd2, s_sss)    \
-  V(I64x2RelaxedLaneSelect, 0xfdd3, s_sss)    \
-  V(F32x4Qfma, 0xfdaf, s_sss)                 \
-  V(F32x4Qfms, 0xfdb0, s_sss)                 \
-  V(F64x2Qfma, 0xfdcf, s_sss)                 \
-  V(F64x2Qfms, 0xfdd0, s_sss)                 \
-  V(F32x4RelaxedMin, 0xfdb4, s_ss)            \
-  V(F32x4RelaxedMax, 0xfde2, s_ss)            \
-  V(F64x2RelaxedMin, 0xfdd4, s_ss)            \
-  V(F64x2RelaxedMax, 0xfdee, s_ss)            \
-  V(I32x4RelaxedTruncF32x4S, 0xfda5, s_s)     \
-  V(I32x4RelaxedTruncF32x4U, 0xfda6, s_s)     \
-  V(I32x4RelaxedTruncF64x2SZero, 0xfdc5, s_s) \
-  V(I32x4RelaxedTruncF64x2UZero, 0xfdc6, s_s) \
-  V(F32x4RecipApprox, 0xfdbb, s_s)            \
-  V(F32x4RecipSqrtApprox, 0xfdc2, s_s)
+#define FOREACH_RELAXED_SIMD_OPCODE(V)         \
+  V(I8x16RelaxedSwizzle, 0xfd100, s_ss)        \
+  V(I32x4RelaxedTruncF32x4S, 0xfd101, s_s)     \
+  V(I32x4RelaxedTruncF32x4U, 0xfd102, s_s)     \
+  V(I32x4RelaxedTruncF64x2SZero, 0xfd103, s_s) \
+  V(I32x4RelaxedTruncF64x2UZero, 0xfd104, s_s) \
+  V(F32x4Qfma, 0xfd105, s_sss)                 \
+  V(F32x4Qfms, 0xfd106, s_sss)                 \
+  V(F64x2Qfma, 0xfd107, s_sss)                 \
+  V(F64x2Qfms, 0xfd108, s_sss)                 \
+  V(I8x16RelaxedLaneSelect, 0xfd109, s_sss)    \
+  V(I16x8RelaxedLaneSelect, 0xfd10a, s_sss)    \
+  V(I32x4RelaxedLaneSelect, 0xfd10b, s_sss)    \
+  V(I64x2RelaxedLaneSelect, 0xfd10c, s_sss)    \
+  V(F32x4RelaxedMin, 0xfd10d, s_ss)            \
+  V(F32x4RelaxedMax, 0xfd10e, s_ss)            \
+  V(F64x2RelaxedMin, 0xfd10f, s_ss)            \
+  V(F64x2RelaxedMax, 0xfd110, s_ss)            \
+  V(I16x8RelaxedQ15MulRS, 0xfd111, s_ss)
 
 #define FOREACH_SIMD_1_OPERAND_1_PARAM_OPCODE(V) \
   V(I8x16ExtractLaneS, 0xfd15, _)                \
@@ -709,6 +708,7 @@ bool V8_EXPORT_PRIVATE IsJSCompatibleSignature(const FunctionSig* sig,
   V(RefCastStatic, 0xfb45, _)                                                  \
   V(BrOnCastStatic, 0xfb46, _)                                                 \
   V(BrOnCastStaticFail, 0xfb47, _)                                             \
+  V(RefCastNopStatic, 0xfb48, _)                                               \
   V(RefIsFunc, 0xfb50, _)                                                      \
   V(RefIsData, 0xfb51, _)                                                      \
   V(RefIsI31, 0xfb52, _)                                                       \
@@ -724,7 +724,32 @@ bool V8_EXPORT_PRIVATE IsJSCompatibleSignature(const FunctionSig* sig,
   V(BrOnNonFunc, 0xfb63, _)                                                    \
   V(BrOnNonData, 0xfb64, _)                                                    \
   V(BrOnNonI31, 0xfb65, _)                                                     \
-  V(BrOnNonArray, 0xfb67, _)
+  V(BrOnNonArray, 0xfb67, _)                                                   \
+  V(StringNewWtf8, 0xfb80, _)                                                  \
+  V(StringNewWtf16, 0xfb81, _)                                                 \
+  V(StringConst, 0xfb82, _)                                                    \
+  V(StringMeasureUtf8, 0xfb83, _)                                              \
+  V(StringMeasureWtf8, 0xfb84, _)                                              \
+  V(StringMeasureWtf16, 0xfb85, _)                                             \
+  V(StringEncodeWtf8, 0xfb86, _)                                               \
+  V(StringEncodeWtf16, 0xfb87, _)                                              \
+  V(StringConcat, 0xfb88, _)                                                   \
+  V(StringEq, 0xfb89, _)                                                       \
+  V(StringIsUSVSequence, 0xfb8a, _)                                            \
+  V(StringAsWtf8, 0xfb90, _)                                                   \
+  V(StringViewWtf8Advance, 0xfb91, _)                                          \
+  V(StringViewWtf8Encode, 0xfb92, _)                                           \
+  V(StringViewWtf8Slice, 0xfb93, _)                                            \
+  V(StringAsWtf16, 0xfb98, _)                                                  \
+  V(StringViewWtf16Length, 0xfb99, _)                                          \
+  V(StringViewWtf16GetCodeUnit, 0xfb9a, _)                                     \
+  V(StringViewWtf16Encode, 0xfb9b, _)                                          \
+  V(StringViewWtf16Slice, 0xfb9c, _)                                           \
+  V(StringAsIter, 0xfba0, _)                                                   \
+  V(StringViewIterCur, 0xfba1, _)                                              \
+  V(StringViewIterAdvance, 0xfba2, _)                                          \
+  V(StringViewIterRewind, 0xfba3, _)                                           \
+  V(StringViewIterSlice, 0xfba4, _)
 
 // All opcodes.
 #define FOREACH_OPCODE(V)            \
@@ -840,6 +865,13 @@ class V8_EXPORT_PRIVATE WasmOpcodes {
   static constexpr bool IsBreakable(WasmOpcode);
 
   static constexpr MessageTemplate TrapReasonToMessageId(TrapReason);
+  // Prefixed opcodes are encoded as 1 prefix byte, followed by LEB encoded
+  // opcode bytes. With the addition of relaxed SIMD opcodes, the decoded
+  // length of opcode bytes exceeds two bytes. This method, and other mehtods
+  // that operate on prefixed opcodes, handle upto 3 byte opcodes, when
+  // opcodes exceed a decoded length of 3 bytes, this code, and elsewhere
+  // that assumes 3-bytes to be the maximum opcode length should be updated.
+  static constexpr byte ExtractPrefix(WasmOpcode);
   static inline const char* TrapReasonMessage(TrapReason);
 };
 

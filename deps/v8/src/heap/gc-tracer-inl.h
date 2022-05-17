@@ -77,6 +77,31 @@ GCTracer::Scope::~Scope() {
 #endif  // defined(V8_RUNTIME_CALL_STATS)
 }
 
+constexpr const char* GCTracer::Scope::Name(ScopeId id) {
+#define CASE(scope)  \
+  case Scope::scope: \
+    return "V8.GC_" #scope;
+  switch (id) {
+    TRACER_SCOPES(CASE)
+    TRACER_BACKGROUND_SCOPES(CASE)
+    default:
+      return nullptr;
+  }
+#undef CASE
+}
+
+constexpr bool GCTracer::Scope::NeedsYoungEpoch(ScopeId id) {
+#define CASE(scope)  \
+  case Scope::scope: \
+    return true;
+  switch (id) {
+    TRACER_YOUNG_EPOCH_SCOPES(CASE)
+    default:
+      return false;
+  }
+#undef CASE
+}
+
 constexpr int GCTracer::Scope::IncrementalOffset(ScopeId id) {
   DCHECK_LE(FIRST_INCREMENTAL_SCOPE, id);
   DCHECK_GE(LAST_INCREMENTAL_SCOPE, id);
@@ -152,7 +177,7 @@ WorkerThreadRuntimeCallStats* GCTracer::worker_thread_runtime_call_stats() {
 }
 
 RuntimeCallCounterId GCTracer::RCSCounterFromScope(Scope::ScopeId id) {
-  STATIC_ASSERT(Scope::FIRST_SCOPE == Scope::MC_INCREMENTAL);
+  static_assert(Scope::FIRST_SCOPE == Scope::MC_INCREMENTAL);
   return static_cast<RuntimeCallCounterId>(
       static_cast<int>(RuntimeCallCounterId::kGC_MC_INCREMENTAL) +
       static_cast<int>(id));
